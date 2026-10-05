@@ -1,10 +1,6 @@
-// ServerDash telemetry simulation
-// Mocks a real-time feed of OSHI-style system metrics: each tick advances
-// a short rolling history per metric, which drives both the numeric
-// readout and the sparkline trend line.
-
+// ServerDash telemetry script connected to Spring Boot /api/v1/telemetry
 const HISTORY_LENGTH = 24;
-const TICK_MS = 3000;
+const TICK_MS = 1000; // Poll backend every 1 second
 
 const STATUS_COLOR = {
   good: 'var(--green)',
@@ -43,8 +39,8 @@ function applyStatus(cardEl, flagEl, sparkLineEl, status) {
 
 // ---- state ----
 const state = {
-  cpu: { history: Array(HISTORY_LENGTH).fill(62), value: 62 },
-  ram: { history: Array(HISTORY_LENGTH).fill(81), value: 81 },
+  cpu: { history: Array(HISTORY_LENGTH).fill(0), value: 0 },
+  ram: { history: Array(HISTORY_LENGTH).fill(0), value: 0, usedGB: 0, totalGB: 16 },
   net: { history: Array(HISTORY_LENGTH).fill(5.7), value: 5.7, up: 1.2, down: 4.5 },
 };
 
@@ -73,17 +69,16 @@ function renderCpu() {
   const s = state.cpu;
   const status = statusFor(s.value, 70, 85);
   cpuValue.innerHTML = `${Math.round(s.value)}<span class="unit">%</span>`;
-  cpuSparkLine.setAttribute('points', pointsFromHistory(s.history, 40, 95));
+  cpuSparkLine.setAttribute('points', pointsFromHistory(s.history, 0, 100));
   applyStatus(cpuCard, cpuFlag, cpuSparkLine, status);
 }
 
 function renderRam() {
   const s = state.ram;
   const status = statusFor(s.value, 75, 90);
-  const gb = (s.value / 100 * 16).toFixed(1);
   ramValue.innerHTML = `${Math.round(s.value)}<span class="unit">%</span>`;
-  ramSub.textContent = `${gb} GB / 16.0 GB`;
-  ramSparkLine.setAttribute('points', pointsFromHistory(s.history, 55, 98));
+  ramSub.textContent = `${s.usedGB.toFixed(1)} GB / ${s.totalGB.toFixed(1)} GB`;
+  ramSparkLine.setAttribute('points', pointsFromHistory(s.history, 0, 100));
   applyStatus(ramCard, ramFlag, ramSparkLine, status);
 }
 
@@ -93,29 +88,51 @@ function renderNet() {
   netUp.textContent = `▲ ${s.up.toFixed(1)} MB/s`;
   netDown.textContent = `▼ ${s.down.toFixed(1)} MB/s`;
   netSparkLine.setAttribute('points', pointsFromHistory(s.history, 0, 12));
-  // Network has no alert threshold in this build — always neutral/good.
   applyStatus(netCard, netFlag, netSparkLine, 'good');
 }
 
-function tick() {
-  state.cpu.value = randomWalk(state.cpu.value, 42, 92, 6);
-  state.cpu.history.push(state.cpu.value);
-  state.cpu.history.shift();
+// ---- Live Telemetry Fetch Loop ----
+async function fetchTelemetry() {
+  try {
+    const response = await fetch('/api/v1/telemetry');
+    const data = await response.json();
+    
+    // Log live payload to console (Crucial for DevTools Screenshot 4)
+    console.log('OSHI Telemetry received:', data);
 
-  state.ram.value = randomWalk(state.ram.value, 58, 95, 3);
-  state.ram.history.push(state.ram.value);
-  state.ram.history.shift();
+    // 1. Update CPU metric from OSHI
+    if (data.cpuUsage !== undefined) {
+      state.cpu.value = data.cpuUsage;
+      state.cpu.history.push(data.cpuUsage);
+      state.cpu.history.shift();
+    }
 
-  state.net.up = Math.max(0.1, randomWalk(state.net.up, 0, 4, 0.5));
-  state.net.down = Math.max(0.1, randomWalk(state.net.down, 0, 9, 1));
-  state.net.value = state.net.up + state.net.down;
-  state.net.history.push(state.net.value);
-  state.net.history.shift();
+    // 2. Update RAM metric from OSHI
+    if (data.totalMemoryGB !== undefined && data.availableMemoryGB !== undefined) {
+      const usedGB = data.totalMemoryGB - data.availableMemoryGB;
+      const ramPercent = Math.round((usedGB / data.totalMemoryGB) * 100);
+      
+      state.ram.value = ramPercent;
+      state.ram.usedGB = usedGB;
+      state.ram.totalGB = data.totalMemoryGB;
+      state.ram.history.push(ramPercent);
+      state.ram.history.shift();
+    }
 
-  renderCpu();
-  renderRam();
-  renderNet();
-  jitterProcesses();
+    // 3. Update Network I/O simulation
+    state.net.up = Math.max(0.1, randomWalk(state.net.up, 0, 4, 0.5));
+    state.net.down = Math.max(0.1, randomWalk(state.net.down, 0, 9, 1));
+    state.net.value = state.net.up + state.net.down;
+    state.net.history.push(state.net.value);
+    state.net.history.shift();
+
+    renderCpu();
+    renderRam();
+    renderNet();
+    jitterProcesses();
+  } catch (error) {
+    console.error('Error fetching telemetry from Spring Boot backend:', error);
+  }
 }
 
 function jitterProcesses() {
@@ -133,11 +150,10 @@ function updateClock() {
   clockEl.textContent = now.toLocaleTimeString('en-US', { hour12: false });
 }
 
-// ---- init ----
-renderCpu();
-renderRam();
-renderNet();
+// ---- Initialize ----
 updateClock();
-
-setInterval(tick, TICK_MS);
 setInterval(updateClock, 1000);
+
+// Initial telemetry fetch & polling loop
+fetchTelemetry();
+setInterval(fetchTelemetry, TICK_MS);
