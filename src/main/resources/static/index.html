@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ServerDash v1.0</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="scan-sweep" aria-hidden="true"></div>
+
+  <div class="dashboard-container">
+
+    <!-- Top bar -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-name">ServerDash</span>
+        <span class="brand-version">v1.0</span>
+      </div>
+
+      <nav class="nav-links">
+        <a href="#" class="active">Dashboard</a>
+        <a href="#">Processes</a>
+        <a href="#">Logs</a>
+        <a href="#">Settings</a>
+      </nav>
+
+      <div class="status-cluster">
+        <time class="clock" id="clock">--:--:--</time>
+        <span class="status-line" id="status-line">
+          <span class="status-dot" id="status-dot"></span>[&nbsp;ONLINE&nbsp;]
+        </span>
+      </div>
+    </header>
+
+    <!-- Metric readouts -->
+    <section class="metrics-grid">
+
+      <article class="metric-card" id="card-cpu" data-metric="cpu">
+        <div class="metric-head">
+          <span class="metric-label">CPU utilization</span>
+          <span class="metric-flag" id="cpu-flag">nominal</span>
+        </div>
+        <div class="metric-value" id="cpu-value">62<span class="unit">%</span></div>
+        <svg class="sparkline" id="cpu-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
+          <polyline id="cpu-spark-line" points="" />
+        </svg>
+        <div class="metric-sub">8 cores · 3.4 GHz base clock</div>
+      </article>
+
+      <article class="metric-card" id="card-ram" data-metric="ram">
+        <div class="metric-head">
+          <span class="metric-label">Memory usage</span>
+          <span class="metric-flag" id="ram-flag">nominal</span>
+        </div>
+        <div class="metric-value" id="ram-value">81<span class="unit">%</span></div>
+        <svg class="sparkline" id="ram-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
+          <polyline id="ram-spark-line" points="" />
+        </svg>
+        <div class="metric-sub" id="ram-sub">13.0 GB / 16.0 GB</div>
+      </article>
+
+      <article class="metric-card" id="card-net" data-metric="net">
+        <div class="metric-head">
+          <span class="metric-label">Network I/O</span>
+          <span class="metric-flag" id="net-flag">nominal</span>
+        </div>
+        <div class="metric-value" id="net-value">5.7<span class="unit">MB/s</span></div>
+        <svg class="sparkline" id="net-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
+          <polyline id="net-spark-line" points="" />
+        </svg>
+        <div class="metric-sub">
+          <span class="net-up" id="net-up">▲ 1.2 MB/s</span>
+          <span class="net-down" id="net-down">▼ 4.5 MB/s</span>
+        </div>
+      </article>
+
+    </section>
+
+    <!-- Process list -->
+    <section class="table-section">
+      <div class="table-head">
+        <h2>Active processes</h2>
+        <span class="table-sub">OSHI telemetry · updated every 3s</span>
+      </div>
+      <table class="process-table">
+        <thead>
+          <tr>
+            <th class="col-pid">Pid</th>
+            <th>Name</th>
+            <th class="col-num">CPU %</th>
+            <th class="col-num">Memory</th>
+            <th class="col-status">Status</th>
+          </tr>
+        </thead>
+        <tbody id="process-body">
+          <tr data-pid="1042" data-base-cpu="14.2">
+            <td class="col-pid">1042</td>
+            <td>java.exe</td>
+            <td class="col-num cpu-cell">14.2%</td>
+            <td class="col-num">412 MB</td>
+            <td class="col-status"><span class="status-cell running"><span class="status-sq"></span>Running</span></td>
+          </tr>
+          <tr data-pid="884" data-base-cpu="8.1">
+            <td class="col-pid">884</td>
+            <td>mysqld.exe</td>
+            <td class="col-num cpu-cell">8.1%</td>
+            <td class="col-num">620 MB</td>
+            <td class="col-status"><span class="status-cell running"><span class="status-sq"></span>Running</span></td>
+          </tr>
+          <tr data-pid="2109" data-base-cpu="1.0">
+            <td class="col-pid">2109</td>
+            <td>nginx</td>
+            <td class="col-num cpu-cell">1.0%</td>
+            <td class="col-num">45 MB</td>
+            <td class="col-status"><span class="status-cell running"><span class="status-sq"></span>Running</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
