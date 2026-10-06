@@ -24,6 +24,14 @@
   padding: 0;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
 body {
   background-color: var(--bg);
   background-image:
@@ -96,6 +104,16 @@ button:focus-visible {
   background-color: var(--panel);
   padding: 16px 22px;
   margin-bottom: 22px;
+  position: sticky;
+  top: 12px;
+  z-index: 10;
+}
+
+#dashboard,
+#processes,
+#logs,
+#settings {
+  scroll-margin-top: 90px;
 }
 
 .brand {
@@ -261,6 +279,11 @@ button:focus-visible {
   border: 1px solid var(--line);
   background-color: var(--panel);
   padding: 20px 22px 6px;
+  margin-bottom: 22px;
+}
+
+.table-section:last-child {
+  margin-bottom: 0;
 }
 
 .table-head {
@@ -330,6 +353,21 @@ button:focus-visible {
 .status-cell.running .status-sq { background-color: var(--green); }
 .status-cell.elevated .status-sq { background-color: var(--amber); }
 .status-cell.stopped .status-sq { background-color: var(--red); }
+
+.placeholder-note {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  color: var(--text-faint);
+  padding: 10px 0 18px;
+}
+
+.status-line.offline {
+  color: var(--red);
+}
+
+.status-line.offline .status-dot {
+  background-color: var(--red);
+}
 
 /* Responsive */
 @media (max-width: 640px) {

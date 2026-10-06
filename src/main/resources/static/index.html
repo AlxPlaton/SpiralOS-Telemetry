@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ServerDash v1.0</title>
+  <title>SpiralOS v1.0</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
@@ -18,15 +18,15 @@
     <!-- Top bar -->
     <header class="topbar">
       <div class="brand">
-        <span class="brand-name">ServerDash</span>
+        <span class="brand-name">SpiralOS</span>
         <span class="brand-version">v1.0</span>
       </div>
 
-      <nav class="nav-links">
-        <a href="#" class="active">Dashboard</a>
-        <a href="#">Processes</a>
-        <a href="#">Logs</a>
-        <a href="#">Settings</a>
+      <nav class="nav-links" id="nav-links">
+        <a href="#dashboard" class="active">Dashboard</a>
+        <a href="#processes">Processes</a>
+        <a href="#logs">Logs</a>
+        <a href="#settings">Settings</a>
       </nav>
 
       <div class="status-cluster">
@@ -38,7 +38,7 @@
     </header>
 
     <!-- Metric readouts -->
-    <section class="metrics-grid">
+    <section class="metrics-grid" id="dashboard">
 
       <article class="metric-card" id="card-cpu" data-metric="cpu">
         <div class="metric-head">
@@ -80,12 +80,12 @@
       </article>
 
     </section>
-
+	
     <!-- Process list -->
-    <section class="table-section">
+    <section class="table-section" id="processes">
       <div class="table-head">
         <h2>Active processes</h2>
-        <span class="table-sub">OSHI telemetry · updated every 3s</span>
+        <span class="table-sub" id="process-sub">OSHI telemetry · updated every 1s</span>
       </div>
       <table class="process-table">
         <thead>
@@ -121,6 +121,24 @@
           </tr>
         </tbody>
       </table>
+    </section>
+
+    <!-- Logs -->
+    <section class="table-section placeholder-section" id="logs">
+      <div class="table-head">
+        <h2>Logs</h2>
+        <span class="table-sub">no log stream wired up yet</span>
+      </div>
+      <p class="placeholder-note">This panel is reserved for a live log tail once a logging endpoint exists on the backend.</p>
+    </section>
+
+    <!-- Settings -->
+    <section class="table-section placeholder-section" id="settings">
+      <div class="table-head">
+        <h2>Settings</h2>
+        <span class="table-sub">no settings endpoint yet</span>
+      </div>
+      <p class="placeholder-note">This panel is reserved for configuration controls once a settings endpoint exists on the backend.</p>
     </section>
 
   </div>
