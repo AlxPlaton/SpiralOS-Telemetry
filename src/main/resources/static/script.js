@@ -3,14 +3,26 @@
 // and wires up the in-page nav. No mock/random data — everything here
 // reflects whatever TelemetryController returns.
 
-const TELEMETRY_URL = '/api/v1/telemetry';
-const PROCESSES_URL = '/api/v1/telemetry/processes';
+const SETTINGS = {
+  telemetryUrl: '/api/v1/telemetry',
+  processesUrl: '/api/v1/telemetry/processes',
+  pollMs: 1000,
+  clockMs: 1000,
+  historyLength: 24,
+  cpuWarn: 70,
+  cpuCrit: 85,
+  ramWarn: 75,
+  ramCrit: 90,
+};
+
+const TELEMETRY_URL = SETTINGS.telemetryUrl;
+const PROCESSES_URL = SETTINGS.processesUrl;
 // NOTE: processor.getSystemCpuLoad(1000) on the backend blocks for ~1s per
 // call. Polling at 1000ms leaves almost no slack between requests — fine
 // under light load, but worth watching for request pileup if the server
 // gets busy. Bump this to 2000+ if you see growing latency.
-const POLL_MS = 1000;
-const HISTORY_LENGTH = 24;
+const POLL_MS = SETTINGS.pollMs;
+const HISTORY_LENGTH = SETTINGS.historyLength;
 
 const STATUS_COLOR = {
   good: 'var(--green)',
@@ -22,6 +34,22 @@ function statusFor(value, warnAt, critAt) {
   if (value >= critAt) return 'crit';
   if (value >= warnAt) return 'warn';
   return 'good';
+}
+
+function logInfo(message, details) {
+  if (details) {
+    console.info(message, details);
+    return;
+  }
+  console.info(message);
+}
+
+function logWarn(message, details) {
+  if (details) {
+    console.warn(message, details);
+    return;
+  }
+  console.warn(message);
 }
 
 function pointsFromHistory(history, min, max) {
@@ -87,7 +115,7 @@ function renderTelemetry(data) {
   pushHistory('cpu', cpuUsage);
   cpuValue.innerHTML = `${Math.round(cpuUsage)}<span class="unit">%</span>`;
   cpuSparkLine.setAttribute('points', pointsFromHistory(history.cpu, 0, 100));
-  applyStatus(cpuCard, cpuFlag, statusFor(cpuUsage, 70, 85));
+  applyStatus(cpuCard, cpuFlag, statusFor(cpuUsage, SETTINGS.cpuWarn, SETTINGS.cpuCrit));
 
   // Memory
   const totalGB = Number(data.totalMemoryGB) || 0;
@@ -98,7 +126,7 @@ function renderTelemetry(data) {
   ramValue.innerHTML = `${Math.round(ramPercent)}<span class="unit">%</span>`;
   ramSub.textContent = `${usedGB.toFixed(1)} GB / ${totalGB.toFixed(1)} GB`;
   ramSparkLine.setAttribute('points', pointsFromHistory(history.ram, 0, 100));
-  applyStatus(ramCard, ramFlag, statusFor(ramPercent, 75, 90));
+  applyStatus(ramCard, ramFlag, statusFor(ramPercent, SETTINGS.ramWarn, SETTINGS.ramCrit));
 
   // Network
   const upMBs = Number(data.networkUpMBs) || 0;
@@ -158,11 +186,26 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+let lastConnectionState = null;
+
 function setConnectionState(connected) {
+  const changed = lastConnectionState !== connected;
+  lastConnectionState = connected;
+
   statusLine.classList.toggle('offline', !connected);
   statusLine.innerHTML = connected
     ? '<span class="status-dot" id="status-dot"></span>[&nbsp;ONLINE&nbsp;]'
     : '<span class="status-dot" id="status-dot"></span>[&nbsp;OFFLINE&nbsp;]';
+
+  if (!changed) return false;
+
+  if (connected) {
+    logInfo('SpiralOS telemetry connection restored.');
+  } else {
+    logWarn('SpiralOS telemetry connection lost; retrying…');
+  }
+
+  return true;
 }
 
 async function poll() {
@@ -180,7 +223,13 @@ async function poll() {
     renderTelemetry(telemetry);
     renderProcesses(processes);
     processSub.textContent = 'OSHI telemetry · updated every 3s';
-    setConnectionState(true);
+
+    if (setConnectionState(true)) {
+      logInfo('Telemetry poll succeeded.', {
+        telemetry,
+        processesCount: Array.isArray(processes) ? processes.length : 0,
+      });
+    }
   } catch (err) {
     console.error('SpiralOS telemetry poll failed:', err);
     processSub.textContent = 'connection lost — retrying…';
@@ -233,4 +282,4 @@ updateClock();
 poll();
 
 setInterval(poll, POLL_MS);
-setInterval(updateClock, 1000);
+setInterval(updateClock, SETTINGS.clockMs);
