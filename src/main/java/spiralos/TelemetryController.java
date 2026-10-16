@@ -1,3 +1,6 @@
+/*
+ * Alexander Platon, 2026
+ */
 package spiralos;
 
 import org.springframework.web.bind.annotation.GetMapping;

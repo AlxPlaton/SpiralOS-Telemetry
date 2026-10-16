@@ -1,3 +1,7 @@
+/*
+ * This is an application developed by Alexander Platon
+ * as apart of a personal and student project.
+ */
 package spiralos;
 
 import org.springframework.boot.SpringApplication;
