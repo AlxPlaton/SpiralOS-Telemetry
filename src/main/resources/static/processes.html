@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <title>SpiralOS · Processes</title>
+</head>
+<body>
+  <div class="dashboard-container">
+    <header class="topbar" id="topbar"></header>
+
+    <section class="stat-strip" aria-label="CPU and process totals">
+      <div class="stat" id="stat-total"><div class="stat-label">Total CPU (all processes)</div><div class="stat-value" id="v-total">--</div></div>
+      <div class="stat" id="stat-system"><div class="stat-label">System CPU</div><div class="stat-value" id="v-system">--</div></div>
+      <div class="stat"><div class="stat-label">Processes</div><div class="stat-value" id="v-procs">--</div></div>
+      <div class="stat"><div class="stat-label">Threads</div><div class="stat-value" id="v-threads">--</div></div>
+    </section>
+
+    <section class="table-section">
+      <div class="table-head"><h2>All processes</h2><span class="table-sub" id="proc-sub">loading…</span></div>
+      <div class="toolbar">
+        <input type="search" id="proc-search" placeholder="Filter by name, user or PID" maxlength="64" aria-label="Filter processes">
+      </div>
+      <div class="table-scroll">
+        <table class="process-table wide">
+          <thead><tr id="proc-head"></tr></thead>
+          <tbody id="process-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+  <script src="common.js"></script>
+  <script src="processes.js"></script>
+</body>
+</html>

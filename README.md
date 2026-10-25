@@ -1,89 +1,98 @@
 # SpiralOS
 
-A lightweight, real-time system telemetry dashboard. A Spring Boot backend reads live hardware and process data via [OSHI](https://github.com/oshi/oshi) and serves it as JSON; a static HTML/CSS/JS frontend polls that API and renders it as a NOC-style monitoring panel.
-
-![status](https://img.shields.io/badge/status-active-brightgreen)
+A real-time system telemetry dashboard. A Spring Boot backend reads live hardware and process data with [OSHI](https://github.com/oshi/oshi) and serves it as JSON behind a login; a static HTML/CSS/JS frontend polls it and renders a NOC-style monitoring panel.
 
 ## Features
 
-- **Live CPU utilization** — system-wide CPU load, sampled from the OS, with a trailing sparkline and a status flag (`nominal` / `elevated` / `critical`) driven by configurable thresholds.
-- **Live memory usage** — used vs. total RAM in GB, with the same sparkline + threshold treatment as CPU.
-- **Live network I/O** — upload/download throughput in MB/s, computed server-side as a delta between polls (OSHI only exposes cumulative byte counters, so the backend tracks the previous snapshot and derives a rate).
-- **Real active process list** — top 10 processes by CPU usage, pulled fresh from the OS on every poll: PID, name, CPU %, memory, and run status. No mock or placeholder data.
-- **Functional navigation** — Dashboard / Processes / Logs / Settings jump to real in-page sections, with a sticky top bar and the active tab tracking scroll position automatically.
-- **Live connection status** — the `[ ONLINE ]` badge flips to `[ OFFLINE ]` if a poll to the backend fails, so a dropped connection is visible instead of silent.
-- **Logs / Settings** — placeholder panels, reserved and styled, ready to wire up once those endpoints exist.
-
-## Tech stack
-
-| Layer      | Tech                                  |
-|------------|----------------------------------------|
-| Backend    | Spring Boot, [OSHI](https://github.com/oshi/oshi) (`oshi-core`) |
-| Frontend   | Static HTML / CSS / vanilla JS (no build step, no framework) |
-| Data       | Polled JSON over `fetch()`, same-origin |
+- **Dashboard**: live CPU, memory and network cards with sparklines and warn/critical colouring, plus the top processes by current CPU load.
+- **Processes page**: every running process with PID, name, user, CPU %, memory, threads and state. Sortable columns, text filter, and a **total CPU %** across all processes next to the system CPU figure.
+- **Logs page**: SpiralOS' own application log, plus any server log files you whitelist (e.g. Pi-hole). Level filter, search, line count, follow and pause.
+- **Settings page**: refresh interval, CPU/memory warn and critical thresholds, and row/line counts. Saved on the server and applied to every page.
+- **Secure by default**: login required, CSRF protection, brute-force lockout, strict CSP. See [`SECURITY.md`](SECURITY.md).
+- **Connection badge** flips to `[ OFFLINE ]` if the backend stops answering.
 
 ## Project structure
 
 ```
 src/main/java/spiralos/
-  SpiralOSApplication.java
-  TelemetryController.java      # REST endpoints, OSHI integration
+  SecurityConfig.java        login, sessions, CSRF, headers, lockout
+  TelemetrySampler.java      one background thread reads OSHI, caches results
+  TelemetryController.java   GET /api/v1/telemetry
+  ProcessController.java     GET /api/v1/processes
+  LogBuffer.java / LogController.java       GET /api/v1/logs[/sources]
+  AppSettings.java / SettingsService.java / SettingsController.java   /api/v1/settings
+  AuthController.java        GET /api/v1/auth/me
 src/main/resources/static/
-  index.html                    # dashboard markup
-  style.css                     # NOC/telemetry-themed styling
-  script.js                     # polling, rendering, nav logic
+  index.html processes.html logs.html settings.html login.html
+  style.css common.js dashboard.js processes.js logs.js settings.js login.js
 ```
 
-## Running it
+## Configuration
+
+Add to `pom.xml`:
+
+```xml
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+```
+
+Add to `src/main/resources/application.properties`:
+
+```properties
+server.error.include-message=never
+server.error.include-stacktrace=never
+server.error.whitelabel.enabled=false
+server.servlet.session.cookie.name=SPIRALOS_SESSION
+server.servlet.session.cookie.http-only=true
+server.servlet.session.cookie.same-site=strict
+server.servlet.session.cookie.secure=${SPIRALOS_COOKIE_SECURE:false}
+server.servlet.session.timeout=30m
+server.servlet.session.tracking-modes=cookie
+
+spiralos.sampler.interval-ms=2000
+spiralos.settings.path=./spiralos-settings.properties
+# Optional extra log files shown on the Logs page (id=path, comma separated):
+# spiralos.logs.files=pihole=/var/log/pihole/pihole.log
+```
+
+Set the admin credentials as environment variables (never commit them):
 
 ```bash
-./mvnw spring-boot:run
+export SPIRALOS_ADMIN_USER=admin
+export SPIRALOS_ADMIN_PASSWORD='at-least-12-characters'
 ```
 
-Then open **http://localhost:8080**. The dashboard starts polling the backend automatically — no separate frontend server needed, since the static files are served by Spring Boot itself.
+## Running
+
+```bash
+./mvnw package
+java -jar target/spiralos-telemetry-0.0.1-SNAPSHOT.jar
+```
+
+Open `http://<host>:8080` and sign in. In Eclipse, set the same variables under *Run Configurations > Environment*.
 
 ## API
 
-### `GET /api/v1/telemetry`
+All endpoints require an authenticated session. State-changing requests also need the `X-XSRF-TOKEN` header (the frontend does this automatically).
 
-Returns current system metrics.
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/v1/telemetry` | CPU %, memory, network rates, process/thread totals |
+| GET | `/api/v1/processes?sort=cpu&order=desc&limit=100&q=` | Process list plus `totalCpuPercent` and `systemCpuPercent` |
+| GET | `/api/v1/logs/sources` | Available log sources |
+| GET | `/api/v1/logs?source=app&lines=200&level=ALL&q=` | Log lines |
+| GET / PUT | `/api/v1/settings` | Read / update settings |
+| POST | `/api/v1/settings/reset` | Restore default settings |
+| GET | `/api/v1/auth/me` | Current user |
 
-```json
-{
-  "cpuUsage": 42,
-  "totalMemoryGB": 16,
-  "availableMemoryGB": 7,
-  "networkUpMBs": 0.14,
-  "networkDownMBs": 0.52
-}
-```
+## Notes
 
-### `GET /api/v1/telemetry/processes`
-
-Returns the top 10 processes by CPU usage.
-
-```json
-[
-  {
-    "pid": 22324,
-    "name": "eclipse",
-    "cpuPercent": 17.6,
-    "memoryMB": 1352,
-    "status": "RUNNING"
-  }
-]
-```
-
-The frontend polls both endpoints together on a fixed interval (`POLL_MS` in `script.js`, currently 1000ms) and re-renders the metric cards, sparklines, and process table from whatever comes back.
-
-## Known notes / limitations
-
-- **Windows: PID 0 ("System Idle Process")** is deliberately excluded from the process list — it gets credited with CPU time whenever a core is doing nothing, so it reports huge, meaningless load on an idle machine rather than reflecting an actual workload.
-- **Process CPU % is normalized by logical core count**, so it reads on roughly the same 0–100 scale as the CPU utilization card, rather than OSHI's raw cumulative value (which can exceed 100% for multi-threaded processes).
-- **Network throughput on a near-idle machine can legitimately read close to 0.00 MB/s** — the dashboard shows two decimal places so small amounts of background traffic are still visible instead of rounding away.
-- **Polling at 1 second** works but leaves little slack: the backend's CPU sample itself takes ~1 second to measure. If you see growing latency under load, increase `POLL_MS` in `script.js` to 2000ms or higher.
-- **Logs and Settings** are UI placeholders only — there's no backend endpoint behind them yet.
+- Per-process CPU is measured **between samples** (current load), normalised by logical core count, so it is on the same 0-100 scale as the system CPU. PID 0 (System Idle Process) is excluded.
+- "Total CPU" is the sum of per-process load; it can differ slightly from system CPU because of sampling timing and kernel time.
+- Network rates exclude the loopback interface.
 
 ## License
 
-MIT — see `LICENSE.txt`.
+MIT, see `LICENSE.txt`.

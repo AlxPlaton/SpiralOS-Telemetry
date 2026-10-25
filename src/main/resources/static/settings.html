@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <title>SpiralOS · Settings</title>
+</head>
+<body>
+  <div class="dashboard-container">
+    <header class="topbar" id="topbar"></header>
+
+    <section class="table-section">
+      <div class="table-head"><h2>Settings</h2><span class="table-sub" id="whoami"></span></div>
+      <form id="settings-form" class="settings-form" novalidate></form>
+      <p class="form-msg" id="settings-msg" role="status"></p>
+      <p class="placeholder-note">The sign-in password is not changed here. It is set on the server with the SPIRALOS_ADMIN_PASSWORD environment variable.</p>
+    </section>
+  </div>
+  <script src="common.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

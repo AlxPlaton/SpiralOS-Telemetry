@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <title>SpiralOS · Logs</title>
+</head>
+<body>
+  <div class="dashboard-container">
+    <header class="topbar" id="topbar"></header>
+
+    <section class="table-section">
+      <div class="table-head"><h2>Logs</h2><span class="table-sub" id="log-meta">loading…</span></div>
+      <div class="toolbar">
+        <select id="log-source" aria-label="Log source"></select>
+        <select id="log-level" aria-label="Minimum level">
+          <option value="ALL">All levels</option><option value="INFO">Info and above</option>
+          <option value="WARN">Warnings and errors</option><option value="ERROR">Errors only</option>
+        </select>
+        <select id="log-lines" aria-label="Number of lines"></select>
+        <input type="search" id="log-search" placeholder="Search text" maxlength="100" aria-label="Search logs">
+        <label class="inline"><input type="checkbox" id="log-follow" checked> Follow</label>
+        <button type="button" class="btn" id="log-pause">Pause</button>
+      </div>
+      <div class="log-view" id="log-view" role="log" aria-live="off" tabindex="0"></div>
+    </section>
+  </div>
+  <script src="common.js"></script>
+  <script src="logs.js"></script>
+</body>
+</html>

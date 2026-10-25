@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <title>SpiralOS · Sign in</title>
+</head>
+<body class="login-body">
+  <main class="login-card">
+    <h1 class="login-brand">SpiralOS</h1>
+    <p class="login-sub">Sign in to continue</p>
+    <p class="form-msg error" id="login-msg" role="alert" hidden></p>
+    <form method="post" action="/login">
+      <label>Username<input name="username" type="text" autocomplete="username" required autofocus></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <input type="hidden" name="_csrf" id="csrf" value="">
+      <button class="btn btn-primary" type="submit">Sign in</button>
+    </form>
+  </main>
+  <script src="login.js"></script>
+</body>
+</html>

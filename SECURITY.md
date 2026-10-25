@@ -1,27 +1,32 @@
 # Security
 
-## Current status: LAN-only, pre-hardening
+SpiralOS reads live system data (CPU, memory, network, process list, logs), so it is treated as sensitive from the start. This file describes what is implemented today and what is still planned before public internet exposure.
 
-SpiralOS is currently developed and deployed for **local network use only**. It is **not** intended to be exposed to the public internet in its current state, and doing so is not recommended. Specifically, as of now:
+## Implemented
 
-- There is **no authentication** — anyone who can reach the dashboard's port can view full system telemetry and the live process list.
-- There is **no HTTPS/TLS** — traffic between browser and server is unencrypted.
-- There is **no rate limiting** on the API endpoints.
-- The server-hosting firewall currently scopes access to the local subnet (`ufw allow from <LAN range> to any port ...`), which is the only thing currently preventing outside access — not anything in the application itself.
+- **Authentication on everything.** Every page and every `/api/**` endpoint requires login except the login page itself. Unauthenticated API calls get `401`, not a redirect.
+- **No credentials in source control.** The admin account comes from the `SPIRALOS_ADMIN_USER` / `SPIRALOS_ADMIN_PASSWORD` environment variables. The app refuses to start if the password is missing or shorter than 12 characters. Passwords are hashed with BCrypt (cost 12) in memory.
+- **Brute-force lockout.** 5 failed logins from one address locks that address out for 15 minutes. Successes and failures are written to the application log.
+- **Session hardening.** `HttpOnly` + `SameSite=Strict` session cookie, 30-minute idle timeout, cookie-only session tracking, session id rotated on login.
+- **CSRF protection** on every state-changing request (settings, logout, login), using a double-submit token cookie.
+- **Strict Content-Security-Policy**: no inline scripts, same-origin connections only, no framing. `Referrer-Policy: no-referrer`, `X-Content-Type-Options`, `X-Frame-Options` and cache-control headers come from Spring Security defaults.
+- **No same-origin bypass.** CORS is not enabled, so other websites cannot call the API from a visitor's browser.
+- **Server-side validation** of every parameter and setting; error responses never include stack traces.
+- **No injection from data.** Process names and log lines are rendered with `textContent`, never `innerHTML`.
+- **Log sources are operator-defined.** The Logs API only accepts a source id from `application.properties`; clients can never supply a file path.
+- **Process command lines are deliberately not exposed** (they often contain tokens and passwords). There is no "kill process" feature.
+- **One sampler thread.** OSHI is read on a single background thread and cached, so request volume cannot drive system load.
 
-This is an intentional, staged approach: get core functionality working and correct first, harden before widening exposure.
+## Before exposing this to the internet
 
-## Planned before any internet-facing deployment
-
-- [ ] **Authentication** on both the dashboard and the API endpoints (e.g. Spring Security with a login, or token-based auth for the REST endpoints).
-- [ ] **HTTPS/TLS**, either via Spring Boot's built-in SSL config or terminated at a reverse proxy (nginx/Caddy) in front of the app.
-- [ ] **Reverse proxy in front of the embedded Tomcat server**, rather than exposing port 8080 directly.
-- [ ] **Rate limiting** on `/api/v1/telemetry` and `/api/v1/telemetry/processes` to prevent abuse/scraping.
-- [ ] **Run as a dedicated non-root system user** via a systemd service, rather than an interactive shell session.
-- [ ] **Restrict CORS** explicitly rather than relying on same-origin defaults, once this is no longer a single-origin static+API app.
-- [ ] **Audit what the process list actually exposes** — process names/args can leak information about what's running on a box; worth deciding what's safe to show once this isn't LAN-only.
-- [ ] **Keep `oshi-core` and Spring Boot dependencies current** — this app reads raw OS/hardware data, so dependency hygiene matters more than average.
+- [ ] Put it behind a **reverse proxy with HTTPS** (Caddy or nginx); do not forward port 8080 directly.
+- [ ] Set `SPIRALOS_COOKIE_SECURE=true` and `server.forward-headers-strategy=native` once TLS is in place.
+- [ ] Add **two-factor authentication** (TOTP) or put the app behind a VPN (WireGuard/Tailscale), which is the safest option for a personal tool.
+- [ ] Make login lockout persistent and proxy-aware (it is in-memory and keyed on the socket address today).
+- [ ] Self-host the fonts instead of loading them from Google Fonts.
+- [ ] Run as a dedicated non-root system user via a systemd unit, and keep `oshi-core`, Spring Boot and Spring Security up to date.
+- [ ] Support multiple users/roles if more than one person will ever sign in.
 
 ## Reporting a concern
 
-This is a personal/learning project rather than a maintained public package, but if you spot a security issue, please open an issue on this repo describing it rather than relying on it being obvious from the code.
+This is a personal/learning project. If you spot a security issue, please open an issue on this repo describing it.
