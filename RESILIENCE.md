@@ -29,7 +29,9 @@ The distributed attack (section 5) takes about a minute, so it is opt-in:
 | Scaling users (in-process burst) | `ScalabilityStressTests` | 2 |
 | Scaling users (real HTTP server, under attack) | `ServerStressProofTest` | 1 |
 | Startup smoke test | `SpiralosTelemetryApplicationTests` | 1 |
-| **Total in every build** | | **51 passing** |
+| Trend history + anomaly alerts (Week 10) | `AnomalyDetectionTests` | 14 |
+| Trend history + alert endpoints (Week 10) | `TrendAlertApiTests` | 3 |
+| **Total in every build** | | **68 passing** |
 | Distributed attack, 256 MB heap (`-Pattack`) | `DistributedAttackTest` | 1 |
 
 ---
@@ -202,3 +204,25 @@ fail the test.
   under-states CPU pressure on the attacker side and over-states it on the server side.
 - With one machine, Windows' ~16k outgoing ports limit how many connections the attacker can make.
   The test closes its sockets with `SO_LINGER=0` so the attacker doesn't run out first.
+
+## 6. Running the tests on the real Linux server
+
+The tests above were written and run on Windows. Running them on the actual Ubuntu server
+(4 cores, 7 GB RAM, Java 21) **found two problems that Windows had hidden**, both now fixed.
+
+| Problem on Linux | Why Windows hid it | Fix |
+|---|---|---|
+| The attack test crashed with `OutOfMemoryError` during the slowloris phase | Windows refused most of the 9,000 slow connections (only ~600-900 opened). Linux accepted them up to Tomcat's 8,192 limit, and each one costs ~20-30 KB of buffers: more than the 256 MB heap | `server.tomcat.max-connections=1000` caps that at ~30 MB. Past it, new connections wait in the OS queue instead of crashing the server |
+| The background sampler froze under load: 2 readings, then the same stale reading even after the load ended | Linux shares CPU roughly equally per thread. With ~765 threads busy, the sampler got about 0.5% of 4 cores, not enough to finish a full `/proc` scan of every process | The sampler is split: CPU, memory and network (a few file reads) update every 2 s on their own thread; the process-table scan runs on a second thread; network interfaces are re-discovered once a minute instead of every sample |
+
+**Server results before the fix (Linux, 4 cores):** stress test 20,367 requests in 15 s, 0 errors,
+but only 2 sampler readings (the test requires 3) and a frozen snapshot afterwards; the attack
+test ran out of memory.
+
+**Trade-off:** during a slowloris attack, new visitors may now have to wait for a free
+connection slot. The server stays up and recovers when the attack stops. The full fix is a
+reverse proxy with per-IP connection limits in front of SpiralOS (Future Work).
+
+**Deployment note:** start the server with `-XX:+ExitOnOutOfMemoryError` under a service
+manager that restarts it (e.g. systemd `Restart=always`), so that if memory ever does run out the
+app restarts cleanly instead of limping along half-broken.

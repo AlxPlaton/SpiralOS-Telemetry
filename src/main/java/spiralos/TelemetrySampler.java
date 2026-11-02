@@ -7,13 +7,19 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import oshi.SystemInfo;
 import oshi.hardware.CentralProcessor;
 import oshi.hardware.GlobalMemory;
@@ -48,21 +54,35 @@ public class TelemetrySampler {
     private final GlobalMemory mem;
     private final int cores;
 
-    // Only touched by the scheduler thread.
+    /** Result of the (expensive) process-table scan, published for the fast sampler to reuse. */
+    private record ProcessSample(List<ProcRow> rows, double totalCpuPercent, int threadCount) {}
+
+    private static final long NET_REFRESH_MS = 60_000;
+
+    // Only touched by the scheduler thread (fast sample).
     private long[] prevTicks;
     private long prevRecv;
     private long prevSent;
     private long prevNetTime;
+    private List<NetworkIF> nets = List.of();
+    private long netsFoundAt;
+
+    // Only touched by the process-scan thread.
     private Map<Integer, OSProcess> prevProcs = new HashMap<>();
 
     private volatile Snapshot latest;
+    private volatile ProcessSample procs = new ProcessSample(List.of(), 0, 0);
 
     private final TelemetryHistory history;
     private final AlertMonitor alerts;
+    private final long intervalMs;
+    private ScheduledExecutorService procThread;
 
-    public TelemetrySampler(TelemetryHistory history, AlertMonitor alerts) {
+    public TelemetrySampler(TelemetryHistory history, AlertMonitor alerts,
+            @Value("${spiralos.sampler.interval-ms:2000}") long intervalMs) {
         this.history = history;
         this.alerts = alerts;
+        this.intervalMs = intervalMs;
         SystemInfo si = new SystemInfo();
         this.hw = si.getHardware();
         this.os = si.getOperatingSystem();
@@ -78,6 +98,27 @@ public class TelemetrySampler {
         return latest;
     }
 
+    /**
+     * The process-table scan reads several /proc files per process on Linux, which is far slower
+     * than the system-wide counters. Running it on its own thread means a slow scan (e.g. when
+     * the CPU is saturated) can never freeze the CPU / memory / network numbers.
+     */
+    @PostConstruct
+    void startProcessScanner() {
+        procThread = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "spiralos-process-scan");
+            t.setDaemon(true);
+            return t;
+        });
+        procThread.scheduleWithFixedDelay(this::sampleProcesses, 500, intervalMs, TimeUnit.MILLISECONDS);
+    }
+
+    @PreDestroy
+    void stopProcessScanner() {
+        procThread.shutdownNow();
+    }
+
+    /** Fast path: only system-wide counters, a handful of file reads. */
     @Scheduled(fixedDelayString = "${spiralos.sampler.interval-ms:2000}", initialDelay = 1000)
     void sample() {
         try {
@@ -87,13 +128,15 @@ public class TelemetrySampler {
             double cpuPercent = clamp(cpu.getSystemCpuLoadBetweenTicks(prevTicks) * 100);
             prevTicks = cpu.getSystemCpuLoadTicks();
 
-            // Network: sum of non-loopback interfaces, turned into a rate.
+            // Network: sum of non-loopback interfaces, turned into a rate. Discovering the
+            // interfaces is the costly part and they rarely change, so do it once a minute.
+            if (now - netsFoundAt > NET_REFRESH_MS) {
+                nets = hw.getNetworkIFs().stream().filter(n -> !isLoopback(n)).toList();
+                netsFoundAt = now;
+            }
             long recv = 0;
             long sent = 0;
-            for (NetworkIF nif : hw.getNetworkIFs()) {
-                if (isLoopback(nif)) {
-                    continue;
-                }
+            for (NetworkIF nif : nets) {
                 nif.updateAttributes();
                 recv += nif.getBytesRecv();
                 sent += nif.getBytesSent();
@@ -109,13 +152,27 @@ public class TelemetrySampler {
             prevSent = sent;
             prevNetTime = now;
 
-            // Processes: CPU is measured BETWEEN samples (current load), not lifetime average.
-            List<OSProcess> procs = os.getProcesses();
-            Map<Integer, OSProcess> current = new HashMap<>(procs.size() * 2);
-            List<ProcRow> rows = new ArrayList<>(procs.size());
+            ProcessSample ps = procs;
+            latest = new Snapshot(now, r1(cpuPercent), cores, r1(mem.getTotal() / GB),
+                    r1(mem.getAvailable() / GB), r2(up), r2(down), r1(Math.min(100, ps.totalCpuPercent())),
+                    ps.rows().size(), ps.threadCount(), ps.rows());
+            history.record(latest);
+            alerts.check();
+        } catch (RuntimeException e) {
+            log.error("Telemetry sampling failed: {}", e.toString());
+        }
+    }
+
+    /** Slow path: the full process table, on its own thread. */
+    void sampleProcesses() {
+        try {
+            // CPU is measured BETWEEN scans (current load), not lifetime average.
+            List<OSProcess> all = os.getProcesses();
+            Map<Integer, OSProcess> current = new HashMap<>(all.size() * 2);
+            List<ProcRow> rows = new ArrayList<>(all.size());
             double totalCpu = 0;
             int totalThreads = 0;
-            for (OSProcess p : procs) {
+            for (OSProcess p : all) {
                 int pid = p.getProcessID();
                 current.put(pid, p);
                 if (pid == 0) {
@@ -131,14 +188,9 @@ public class TelemetrySampler {
                         p.getState() == null ? "OTHER" : p.getState().name()));
             }
             prevProcs = current;
-
-            latest = new Snapshot(now, r1(cpuPercent), cores, r1(mem.getTotal() / GB),
-                    r1(mem.getAvailable() / GB), r2(up), r2(down), r1(Math.min(100, totalCpu)),
-                    rows.size(), totalThreads, Collections.unmodifiableList(rows));
-            history.record(latest);
-            alerts.check();
+            procs = new ProcessSample(Collections.unmodifiableList(rows), totalCpu, totalThreads);
         } catch (RuntimeException e) {
-            log.error("Telemetry sampling failed: {}", e.toString());
+            log.error("Process scan failed: {}", e.toString());
         }
     }
 

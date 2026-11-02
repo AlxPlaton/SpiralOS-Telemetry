@@ -417,8 +417,10 @@ class DistributedAttackTest {
                 SLOW_HOLD.toSeconds(), stillOpen, droppedByServer));
         if (s.failed.sum() > 0) {
             line("FINDING: while the slow connections were held, " + s.failed.sum()
-                    + " of the admin's dashboard requests failed. Tomcat's connection limit (8,192) was"
-                    + " exhausted by clients that never finish a request, so real users could not connect.");
+                    + " of the admin's dashboard requests failed. Tomcat's connection limit ("
+                    + env.getProperty("server.tomcat.max-connections", "8192") + ") was"
+                    + " exhausted by clients that never finish a request, so new connections had to wait."
+                    + " The server stayed up; a reverse proxy with per-IP limits is the full fix.");
         } else {
             line("Tomcat kept serving the admin while the slow connections were held.");
         }
