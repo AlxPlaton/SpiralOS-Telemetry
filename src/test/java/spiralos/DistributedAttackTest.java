@@ -365,7 +365,10 @@ class DistributedAttackTest {
             try {
                 s.setSoLinger(true, 0);
                 s.bind(new InetSocketAddress(botIp(10_000 + i), 0));
-                s.connect(new InetSocketAddress("127.0.0.1", port), 3000);
+                // short timeout: once Tomcat's connection cap and the OS queue are full, Linux drops
+                // further connection attempts silently instead of refusing them, and a 3 s wait per
+                // attempt would stall this phase for minutes without changing the result
+                s.connect(new InetSocketAddress("127.0.0.1", port), 500);
                 s.getOutputStream().write("GET /login.html HTTP/1.1\r\nHost: localhost\r\n"
                         .getBytes(StandardCharsets.ISO_8859_1));
                 held.add(s);
