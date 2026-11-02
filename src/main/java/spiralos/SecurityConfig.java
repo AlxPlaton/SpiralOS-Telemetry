@@ -1,6 +1,7 @@
 package spiralos;
 
 import java.io.IOException;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
@@ -23,6 +24,7 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
+import org.springframework.security.web.savedrequest.NullRequestCache;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import jakarta.servlet.FilterChain;
@@ -65,8 +67,9 @@ public class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        LoginAttempts attempts = new LoginAttempts();
+    SecurityFilterChain filterChain(HttpSecurity http,
+            @Value("${spiralos.login.global-max-per-minute:30}") int globalLoginsPerMinute) throws Exception {
+        LoginAttempts attempts = new LoginAttempts(globalLoginsPerMinute);
 
         CookieCsrfTokenRepository csrfRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfRepo.setCookieCustomizer(cookie -> cookie.sameSite("Strict"));
@@ -77,6 +80,9 @@ public class SecurityConfig {
                 .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
             .addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class)
             .addFilterBefore(new LoginThrottleFilter(attempts), UsernamePasswordAuthenticationFilter.class)
+            // Login always lands on "/", so remembering the page an anonymous visitor asked for is
+            // pointless - and doing so created a server session per anonymous request (memory DoS).
+            .requestCache(cache -> cache.requestCache(new NullRequestCache()))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/login.html", "/login.js", "/style.css", "/favicon.ico", "/error").permitAll()
                 .requestMatchers(HttpMethod.POST, "/login").permitAll()
@@ -90,7 +96,6 @@ public class SecurityConfig {
                     res.sendRedirect("/");
                 })
                 .failureHandler((req, res, ex) -> {
-                    attempts.failed(req.getRemoteAddr());
                     log.warn("Failed login attempt from {}", req.getRemoteAddr());
                     res.sendRedirect("/login.html?error");
                 }))
@@ -126,7 +131,7 @@ public class SecurityConfig {
         }
     }
 
-    /** Rejects login POSTs from addresses that are currently locked out. */
+    /** Reserves a login attempt before the password is checked; rejects it if the address or the server is over budget. */
     static final class LoginThrottleFilter extends OncePerRequestFilter {
         private final LoginAttempts attempts;
 
@@ -137,43 +142,108 @@ public class SecurityConfig {
         @Override
         protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                 FilterChain chain) throws ServletException, IOException {
-            if ("POST".equalsIgnoreCase(request.getMethod()) && "/login".equals(request.getRequestURI())
-                    && attempts.isBlocked(request.getRemoteAddr())) {
-                log.warn("Rejected login from locked-out address {}", request.getRemoteAddr());
-                response.sendRedirect("/login.html?locked");
-                return;
+            if ("POST".equalsIgnoreCase(request.getMethod()) && "/login".equals(request.getRequestURI())) {
+                String ip = request.getRemoteAddr();
+                LoginAttempts.Verdict verdict = attempts.tryAcquire(ip);
+                if (verdict == LoginAttempts.Verdict.LOCKED) {
+                    log.warn("Rejected login from locked-out address {}", ip);
+                    response.sendRedirect("/login.html?locked");
+                    return;
+                }
+                if (verdict == LoginAttempts.Verdict.BUSY) {
+                    log.warn("Rejected login from {}: global login rate limit reached", ip);
+                    response.sendRedirect("/login.html?busy");
+                    return;
+                }
             }
             chain.doFilter(request, response);
         }
     }
 
-    /** 5 failures from one address locks it out for 15 minutes. In-memory: resets on restart. */
+    /**
+     * Login throttling. Attempts are counted when they START, not when they fail, so guesses
+     * sent simultaneously cannot all pass the check before any failure is recorded.
+     *  - per address: 5 attempts, then locked out for 15 minutes (a success resets it)
+     *  - globally: at most N attempts per minute from addresses that have never logged in
+     *    successfully, so a botnet's total guess rate (and BCrypt CPU cost) no longer grows
+     *    with the number of IPs it controls. Addresses that have logged in before are exempt,
+     *    so the admin can still get in during an attack.
+     * In-memory: resets on restart.
+     */
     static final class LoginAttempts {
-        private static final int MAX_FAILURES = 5;
-        private static final long LOCK_MS = 15 * 60 * 1000L;
+        enum Verdict { ALLOWED, LOCKED, BUSY }
 
-        private record State(int failures, long lastFailure, long lockedUntil) {}
+        private static final int MAX_ATTEMPTS = 5;
+        private static final long LOCK_MS = 15 * 60 * 1000L;
+        private static final long GLOBAL_WINDOW_MS = 60 * 1000L;
+        private static final int MAX_TRACKED = 10_000;
+        private static final int MAX_TRUSTED = 1_000;
+
+        private record State(int attempts, long lastAttempt, long lockedUntil) {}
 
         private final ConcurrentHashMap<String, State> states = new ConcurrentHashMap<>();
+        private final Set<String> trusted = ConcurrentHashMap.newKeySet();
+        private final int globalMaxPerMinute;
+        private long windowStart;
+        private int windowCount;
 
-        boolean isBlocked(String ip) {
-            State s = states.get(ip);
-            return s != null && s.lockedUntil() > System.currentTimeMillis();
+        LoginAttempts(int globalMaxPerMinute) {
+            this.globalMaxPerMinute = globalMaxPerMinute;
         }
 
-        void failed(String ip) {
+        Verdict tryAcquire(String ip) {
             long now = System.currentTimeMillis();
-            states.compute(ip, (k, s) -> {
-                int failures = (s == null || now - s.lastFailure() > LOCK_MS) ? 1 : s.failures() + 1;
-                return new State(failures, now, failures >= MAX_FAILURES ? now + LOCK_MS : 0);
-            });
-            if (states.size() > 10_000) {
-                states.entrySet().removeIf(e -> now - e.getValue().lastFailure() > LOCK_MS);
+            State current = states.get(ip);
+            if (current != null && current.lockedUntil() > now) {
+                return Verdict.LOCKED;
             }
+            if (!trusted.contains(ip) && !takeGlobal(now)) {
+                return Verdict.BUSY;
+            }
+            boolean[] allowed = { false };
+            states.compute(ip, (k, s) -> {
+                if (s != null && s.lockedUntil() > now) {
+                    return s; // another thread locked it between the check above and here
+                }
+                int n = (s == null || now - s.lastAttempt() > LOCK_MS) ? 1 : s.attempts() + 1;
+                allowed[0] = true;
+                return new State(n, now, n >= MAX_ATTEMPTS ? now + LOCK_MS : 0);
+            });
+            if (states.size() > MAX_TRACKED) {
+                states.entrySet().removeIf(e -> now - e.getValue().lastAttempt() > LOCK_MS);
+            }
+            if (!allowed[0]) {
+                if (!trusted.contains(ip)) {
+                    releaseGlobal(); // a locked-out attempt never reaches BCrypt, so it should not use the budget
+                }
+                return Verdict.LOCKED;
+            }
+            return Verdict.ALLOWED;
+        }
+
+        private synchronized void releaseGlobal() {
+            if (windowCount > 0) {
+                windowCount--;
+            }
+        }
+
+        private synchronized boolean takeGlobal(long now) {
+            if (now - windowStart >= GLOBAL_WINDOW_MS) {
+                windowStart = now;
+                windowCount = 0;
+            }
+            if (windowCount >= globalMaxPerMinute) {
+                return false;
+            }
+            windowCount++;
+            return true;
         }
 
         void succeeded(String ip) {
             states.remove(ip);
+            if (trusted.size() < MAX_TRUSTED) {
+                trusted.add(ip);
+            }
         }
     }
 }

@@ -135,7 +135,8 @@ public class TelemetrySampler {
         }
     }
 
-    private static boolean isLoopback(NetworkIF nif) {
+    // package-private so ResilienceStaticLogicTests can exercise this directly
+    static boolean isLoopback(NetworkIF nif) {
         String name = nif.getName() == null ? "" : nif.getName().toLowerCase(Locale.ROOT);
         String display = nif.getDisplayName() == null ? "" : nif.getDisplayName().toLowerCase(Locale.ROOT);
         if (name.equals("lo") || name.equals("lo0") || display.contains("loopback")) {

@@ -7,6 +7,7 @@
   const msg = document.getElementById('login-msg');
   const q = window.location.search;
   if (q.indexOf('locked') !== -1) show('Too many failed attempts. Try again in 15 minutes.');
+  else if (q.indexOf('busy') !== -1) show('Logins are paused briefly due to unusual activity. Try again in a minute.');
   else if (q.indexOf('error') !== -1) show('Incorrect username or password.');
 
   function show(text) { msg.textContent = text; msg.hidden = false; }

@@ -52,7 +52,14 @@
     		<groupId>org.springframework.boot</groupId>
    			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
-		
+
+		<!-- user()/csrf() request post-processors used by the security & stress tests -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
 	</dependencies>
 
 	<build>
@@ -61,7 +68,35 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<!-- the distributed attack takes ~2 min; run it on demand with -Pattack -->
+					<excludedGroups>attack</excludedGroups>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<!-- ./mvnw test -Pattack : only the distributed attack, on a small-server-sized heap -->
+		<profile>
+			<id>attack</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<groups>attack</groups>
+							<excludedGroups>none</excludedGroups>
+							<argLine>-Xmx256m</argLine>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 
 </project>

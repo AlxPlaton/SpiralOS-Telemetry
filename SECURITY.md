@@ -6,7 +6,7 @@ SpiralOS reads live system data (CPU, memory, network, process list, logs), so i
 
 - **Authentication on everything.** Every page and every `/api/**` endpoint requires login except the login page itself. Unauthenticated API calls get `401`, not a redirect.
 - **No credentials in source control.** The admin account comes from the `SPIRALOS_ADMIN_USER` / `SPIRALOS_ADMIN_PASSWORD` environment variables. The app refuses to start if the password is missing or shorter than 12 characters. Passwords are hashed with BCrypt (cost 12) in memory.
-- **Brute-force lockout.** 5 failed logins from one address locks that address out for 15 minutes. Successes and failures are written to the application log.
+- **Brute-force lockout.** Each address gets 5 login attempts, then a 15-minute lockout. Attempts are counted atomically before the password check, and addresses that have never logged in share a global budget of 30 attempts per minute, which caps botnets. Successes and failures are written to the application log.
 - **Session hardening.** `HttpOnly` + `SameSite=Strict` session cookie, 30-minute idle timeout, cookie-only session tracking, session id rotated on login.
 - **CSRF protection** on every state-changing request (settings, logout, login), using a double-submit token cookie.
 - **Strict Content-Security-Policy**: no inline scripts, same-origin connections only, no framing. `Referrer-Policy: no-referrer`, `X-Content-Type-Options`, `X-Frame-Options` and cache-control headers come from Spring Security defaults.
