@@ -14,6 +14,8 @@
   <div class="dashboard-container">
     <header class="topbar" id="topbar"></header>
 
+    <div class="alert-banner" id="alert-banner" role="status" aria-live="polite" hidden></div>
+
     <section class="metrics-grid" id="dashboard">
       <article class="metric-card" id="card-cpu">
         <div class="metric-head"><span class="metric-label">CPU utilization</span><span class="metric-flag" id="cpu-flag">nominal</span></div>
@@ -36,6 +38,31 @@
     </section>
 
     <section class="table-section">
+      <div class="table-head">
+        <h2>Performance trends</h2>
+        <div class="range-group" role="group" aria-label="Time range">
+          <button type="button" class="range-btn" data-minutes="5" aria-pressed="false">5m</button>
+          <button type="button" class="range-btn" data-minutes="15" aria-pressed="true">15m</button>
+          <button type="button" class="range-btn" data-minutes="60" aria-pressed="false">60m</button>
+        </div>
+      </div>
+      <div class="chart-block">
+        <div class="chart-legend"><span class="key key-cpu">CPU %</span><span class="key key-ram">Memory %</span><span class="chart-readout" id="pct-readout"></span></div>
+        <canvas class="trend-chart" id="chart-pct" role="img" aria-label="CPU and memory usage over time"></canvas>
+      </div>
+      <div class="chart-block">
+        <div class="chart-legend"><span class="key key-net">Network MB/s</span><span class="chart-readout" id="net-readout"></span></div>
+        <canvas class="trend-chart small" id="chart-net" role="img" aria-label="Network throughput over time"></canvas>
+      </div>
+      <p class="table-sub chart-note">History is kept on the server for the last 60 minutes. Markers show when an alert was raised.</p>
+    </section>
+
+    <section class="table-section">
+      <div class="table-head"><h2>Alerts</h2><span class="table-sub">threshold + spike detection</span></div>
+      <ul class="alert-list" id="alert-list"></ul>
+    </section>
+
+    <section class="table-section">
       <div class="table-head"><h2>Top processes</h2><span class="table-sub">by current CPU load</span></div>
       <div class="table-scroll">
         <table class="process-table">
@@ -49,6 +76,7 @@
     </section>
   </div>
   <script src="common.js"></script>
+  <script src="charts.js"></script>
   <script src="dashboard.js"></script>
 </body>
 </html>

@@ -57,7 +57,12 @@ public class TelemetrySampler {
 
     private volatile Snapshot latest;
 
-    public TelemetrySampler() {
+    private final TelemetryHistory history;
+    private final AlertMonitor alerts;
+
+    public TelemetrySampler(TelemetryHistory history, AlertMonitor alerts) {
+        this.history = history;
+        this.alerts = alerts;
         SystemInfo si = new SystemInfo();
         this.hw = si.getHardware();
         this.os = si.getOperatingSystem();
@@ -130,6 +135,8 @@ public class TelemetrySampler {
             latest = new Snapshot(now, r1(cpuPercent), cores, r1(mem.getTotal() / GB),
                     r1(mem.getAvailable() / GB), r2(up), r2(down), r1(Math.min(100, totalCpu)),
                     rows.size(), totalThreads, Collections.unmodifiableList(rows));
+            history.record(latest);
+            alerts.check();
         } catch (RuntimeException e) {
             log.error("Telemetry sampling failed: {}", e.toString());
         }
