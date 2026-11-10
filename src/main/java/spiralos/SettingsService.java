@@ -60,7 +60,10 @@ public class SettingsService {
                     num(p, "ramCritPercent", d.ramCritPercent()),
                     num(p, "dashboardProcessRows", d.dashboardProcessRows()),
                     num(p, "processPageRows", d.processPageRows()),
-                    num(p, "logLines", d.logLines()));
+                    num(p, "logLines", d.logLines()),
+                    num(p, "idleWatts", d.idleWatts()),
+                    num(p, "maxWatts", d.maxWatts()),
+                    num(p, "centsPerKwh", d.centsPerKwh()));
             s.validate();
             return s;
         } catch (IOException | RuntimeException e) {
@@ -79,6 +82,9 @@ public class SettingsService {
         p.setProperty("dashboardProcessRows", String.valueOf(s.dashboardProcessRows()));
         p.setProperty("processPageRows", String.valueOf(s.processPageRows()));
         p.setProperty("logLines", String.valueOf(s.logLines()));
+        p.setProperty("idleWatts", String.valueOf(s.idleWatts()));
+        p.setProperty("maxWatts", String.valueOf(s.maxWatts()));
+        p.setProperty("centsPerKwh", String.valueOf(s.centsPerKwh()));
 
         if (file.getParent() != null) {
             Files.createDirectories(file.getParent());

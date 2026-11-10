@@ -48,7 +48,8 @@ class SecurityResilienceTests {
         String body = """
                 {"refreshIntervalMs":2000,"cpuWarnPercent":70,"cpuCritPercent":85,
                  "ramWarnPercent":75,"ramCritPercent":90,"dashboardProcessRows":8,
-                 "processPageRows":100,"logLines":200}""";
+                 "processPageRows":100,"logLines":200,
+                 "idleWatts":30,"maxWatts":120,"centsPerKwh":15}""";
 
         mockMvc.perform(put("/api/v1/settings")
                         .with(user("admin").roles("ADMIN"))
@@ -63,7 +64,8 @@ class SecurityResilienceTests {
         String body = """
                 {"refreshIntervalMs":2000,"cpuWarnPercent":70,"cpuCritPercent":85,
                  "ramWarnPercent":75,"ramCritPercent":90,"dashboardProcessRows":8,
-                 "processPageRows":100,"logLines":200}""";
+                 "processPageRows":100,"logLines":200,
+                 "idleWatts":30,"maxWatts":120,"centsPerKwh":15}""";
 
         mockMvc.perform(put("/api/v1/settings")
                         .with(user("admin").roles("ADMIN"))
@@ -153,7 +155,8 @@ class SecurityResilienceTests {
                         .content("""
                                 {"refreshIntervalMs":1,"cpuWarnPercent":70,"cpuCritPercent":85,
                                  "ramWarnPercent":75,"ramCritPercent":90,"dashboardProcessRows":8,
-                                 "processPageRows":100,"logLines":200}"""))
+                                 "processPageRows":100,"logLines":200,
+                                 "idleWatts":30,"maxWatts":120,"centsPerKwh":15}"""))
                .andExpect(status().isBadRequest());
     }
 

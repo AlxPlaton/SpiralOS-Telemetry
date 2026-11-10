@@ -170,19 +170,78 @@
         el('span', 'alert-state' + (open ? ' open' : ''),
           open ? 'active ' + duration(Date.now() - e.raisedAt) : 'cleared after ' + duration(e.clearedAt - e.raisedAt))
       );
+      if (e.culprits && e.culprits.length) {
+        li.append(el('span', 'alert-culprits', 'Top when raised: ' + e.culprits.join(' · ')));
+      }
+      return li;
+    }));
+  }
+
+  // ---- Power estimate ----
+  function renderPower(pw) {
+    setValue($('power-value'), Math.round(pw.wattsNow), 'W');
+    const span = pw.minutes >= 1 ? 'last ' + Math.round(pw.minutes) + ' min' : 'under 1 min of data';
+    $('power-avg').textContent = 'avg ' + Math.round(pw.wattsAvg) + ' W (' + span + ')';
+    $('power-cost').textContent = '≈ $' + pw.costPerMonth.toFixed(2) + '/mo';
+    $('power-cost').title = pw.kwhPerMonth + ' kWh/month at ' + pw.centsPerKwh + '¢/kWh. Estimate: idle '
+      + pw.idleWatts + ' W + (' + pw.maxWatts + ' − ' + pw.idleWatts + ') W × CPU%. Set your own watts in Settings.';
+    const w = (cpu) => pw.idleWatts + (pw.maxWatts - pw.idleWatts) * cpu / 100;
+    $('power-spark-line').setAttribute('points', points(hist.cpu.map(w), pw.idleWatts, pw.maxWatts));
+    $('card-power').style.setProperty('--status-color', 'var(--series-net)');
+  }
+
+  // ---- Storage ----
+  function humanHours(h) {
+    if (h < 1) return 'under an hour';
+    if (h < 48) return '~' + Math.round(h) + ' hours';
+    if (h < 24 * 60) return '~' + Math.round(h / 24) + ' days';
+    return 'more than 2 months';
+  }
+
+  function forecastText(f) {
+    if (f.status === 'COLLECTING') return ['forecast after 30 min of data', ''];
+    if (f.status === 'STABLE') return [f.gbPerDay < -0.05 ? 'stable (shrinking ' + Math.abs(f.gbPerDay) + ' GB/day)' : 'stable', ''];
+    const urgency = f.hoursToFull < 24 ? 'crit' : f.hoursToFull < 24 * 7 ? 'warn' : '';
+    return ['full in ' + humanHours(f.hoursToFull) + ' (+' + f.gbPerDay + ' GB/day)', urgency];
+  }
+
+  function renderDisks(d) {
+    const list = $('disk-list');
+    if (!d.disks.length) {
+      list.replaceChildren(el('li', 'placeholder-note', 'Reading drives… (first scan runs a few seconds after start-up)'));
+      return;
+    }
+    list.replaceChildren(...d.disks.map((k) => {
+      const li = el('li', 'disk-item');
+      const bar = el('span', 'disk-bar');
+      const fill = el('span', 'disk-fill');
+      fill.style.setProperty('--pct', Math.min(100, k.usedPercent) + '%');
+      fill.style.setProperty('--status-color', S.COLORS[S.levelFor(k.usedPercent, 75, 90)]);
+      bar.append(fill);
+      const [text, urgency] = forecastText(k.forecast);
+      li.append(
+        el('span', 'disk-mount', k.mount),
+        bar,
+        el('span', 'disk-size', k.usedGB + ' / ' + k.totalGB + ' GB (' + Math.round(k.usedPercent) + '%)'),
+        el('span', 'disk-forecast ' + urgency, text)
+      );
       return li;
     }));
   }
 
   async function refresh() {
-    const [t, p, a] = await Promise.all([
+    const [t, p, a, pw, d] = await Promise.all([
       api('/api/v1/telemetry'),
       api('/api/v1/processes?sort=cpu&order=desc&limit=' + settings.dashboardProcessRows),
       api('/api/v1/alerts'),
+      api('/api/v1/telemetry/power'),
+      api('/api/v1/disks'),
     ]);
     renderTelemetry(t);
     renderProcesses(p.processes);
     renderAlerts(a);
+    renderPower(pw);
+    renderDisks(d);
     // reload history after a gap (e.g. the tab was hidden and polling paused)
     if (!trend.length || Number(t.timestamp) - trend[trend.length - 1].t > 15000) await loadHistory();
     appendPoint(t);

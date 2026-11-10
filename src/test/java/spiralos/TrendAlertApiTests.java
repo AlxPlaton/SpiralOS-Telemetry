@@ -43,6 +43,25 @@ class TrendAlertApiTests {
     }
 
     @Test
+    @DisplayName("Attack: read the power estimate or disk list with no session. Expect: 401")
+    void homelabEndpointsRequireLogin() throws Exception {
+        mockMvc.perform(get("/api/v1/telemetry/power")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/disks")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("Logged in: power estimate and disk list return the expected shape")
+    void homelabEndpointsReturnData() throws Exception {
+        mockMvc.perform(get("/api/v1/telemetry/power").with(user("admin").roles("ADMIN")))
+               .andExpect(status().isOk())
+               .andExpect(jsonPath("$.wattsNow").isNumber())
+               .andExpect(jsonPath("$.costPerMonth").isNumber());
+        mockMvc.perform(get("/api/v1/disks").with(user("admin").roles("ADMIN")))
+               .andExpect(status().isOk())
+               .andExpect(jsonPath("$.disks").isArray());
+    }
+
+    @Test
     @DisplayName("Logged in: history and alerts return the expected shape")
     void endpointsReturnData() throws Exception {
         mockMvc.perform(get("/api/v1/telemetry/history").param("minutes", "5").with(user("admin").roles("ADMIN")))

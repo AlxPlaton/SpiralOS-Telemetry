@@ -157,7 +157,7 @@ public class TelemetrySampler {
                     r1(mem.getAvailable() / GB), r2(up), r2(down), r1(Math.min(100, ps.totalCpuPercent())),
                     ps.rows().size(), ps.threadCount(), ps.rows());
             history.record(latest);
-            alerts.check();
+            alerts.check(ps.rows());
         } catch (RuntimeException e) {
             log.error("Telemetry sampling failed: {}", e.toString());
         }

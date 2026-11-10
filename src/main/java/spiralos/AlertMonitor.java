@@ -3,6 +3,7 @@ package spiralos;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,9 +24,12 @@ public class AlertMonitor {
 
     private static final Logger log = LoggerFactory.getLogger(AlertMonitor.class);
 
-    public record Event(String key, String level, String metric, String message, long raisedAt, Long clearedAt) {}
+    /** culprits: the top processes for that metric at the moment the alert was raised. */
+    public record Event(String key, String level, String metric, String message, long raisedAt, Long clearedAt,
+            List<String> culprits) {}
 
     static final int MAX_EVENTS = 50;
+    static final int MAX_CULPRITS = 3;
 
     private final TelemetryHistory history;
     private final SettingsService settings;
@@ -40,6 +44,11 @@ public class AlertMonitor {
     }
 
     void check() {
+        check(List.of());
+    }
+
+    /** @param processes the latest process table, used to name the culprits of a new alert */
+    void check(List<TelemetrySampler.ProcRow> processes) {
         List<Alert> now = AnomalyDetector.evaluate(history.recent(6), settings.get());
         long t = System.currentTimeMillis();
         Map<String, Alert> byKey = new HashMap<>();
@@ -49,8 +58,9 @@ public class AlertMonitor {
             byKey.put(key, a);
             if (!openSince.containsKey(key)) {
                 openSince.put(key, t);
-                addEvent(new Event(key, a.level().name(), a.metric(), a.message(), t, null));
-                log.warn("Alert raised: {}", a.message());
+                List<String> culprits = culprits(a.metric(), processes);
+                addEvent(new Event(key, a.level().name(), a.metric(), a.message(), t, null, culprits));
+                log.warn("Alert raised: {}{}", a.message(), culprits.isEmpty() ? "" : " - top: " + String.join(", ", culprits));
             }
         }
         for (String key : new ArrayList<>(openSince.keySet())) {
@@ -65,6 +75,28 @@ public class AlertMonitor {
 
     public List<Alert> active() {
         return active;
+    }
+
+    /**
+     * Snapshot of who was responsible when the alert fired: the top processes by CPU for CPU
+     * alerts, by memory for memory alerts. Network has no per-process data, so none.
+     */
+    static List<String> culprits(String metric, List<TelemetrySampler.ProcRow> processes) {
+        Comparator<TelemetrySampler.ProcRow> order = switch (metric) {
+            case "cpu" -> Comparator.comparingDouble(TelemetrySampler.ProcRow::cpuPercent);
+            case "ram" -> Comparator.comparingLong(TelemetrySampler.ProcRow::memoryMB);
+            default -> null;
+        };
+        if (order == null || processes == null) {
+            return List.of();
+        }
+        return processes.stream()
+                .filter(p -> metric.equals("cpu") ? p.cpuPercent() >= 0.5 : p.memoryMB() > 0)
+                .sorted(order.reversed())
+                .limit(MAX_CULPRITS)
+                .map(p -> p.name() + " (pid " + p.pid() + ") "
+                        + (metric.equals("cpu") ? p.cpuPercent() + "%" : String.format("%,d MB", p.memoryMB())))
+                .toList();
     }
 
     /** Newest first. */
@@ -91,7 +123,8 @@ public class AlertMonitor {
             for (int i = copy.size() - 1; i >= 0; i--) {
                 Event e = copy.get(i);
                 if (e.key().equals(key) && e.raisedAt() == raisedAt && e.clearedAt() == null) {
-                    copy.set(i, new Event(e.key(), e.level(), e.metric(), e.message(), e.raisedAt(), clearedAt));
+                    copy.set(i, new Event(e.key(), e.level(), e.metric(), e.message(), e.raisedAt(), clearedAt,
+                            e.culprits()));
                     events.clear();
                     events.addAll(copy);
                     return;

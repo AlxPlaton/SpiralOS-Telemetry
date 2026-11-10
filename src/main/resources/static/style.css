@@ -500,3 +500,22 @@ th[aria-sort] .th-btn { color: var(--text); }
   .alert-msg, .alert-state { grid-column: 1 / -1; }
   .chart-readout { margin-left: 0; width: 100%; }
 }
+
+/* ===== Alert culprits, storage ===== */
+.alert-culprits { grid-column: 1 / -1; color: var(--text-dim); font-size: 0.75rem; overflow-wrap: anywhere; }
+
+.disk-list { list-style: none; margin: 0 0 14px; padding: 0; font-family: var(--mono); font-size: 0.8rem; }
+.disk-item { display: grid; grid-template-columns: minmax(80px, 12ch) minmax(80px, 1fr) auto; gap: 4px 14px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
+.disk-item:first-child { border-top: none; }
+.disk-mount { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.disk-bar { display: block; height: 8px; background: var(--bg); border: 1px solid var(--line); }
+.disk-fill { display: block; height: 100%; width: var(--pct, 0%); background: var(--status-color, var(--green)); }
+.disk-size { color: var(--text-dim); white-space: nowrap; }
+.disk-forecast { grid-column: 2 / -1; color: var(--text-faint); font-size: 0.75rem; }
+.disk-forecast.warn { color: var(--amber); }
+.disk-forecast.crit { color: var(--red); }
+
+@media (max-width: 640px) {
+  .disk-item { grid-template-columns: 1fr auto; }
+  .disk-bar, .disk-forecast { grid-column: 1 / -1; }
+}

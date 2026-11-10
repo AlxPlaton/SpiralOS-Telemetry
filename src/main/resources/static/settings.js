@@ -15,6 +15,11 @@
       ['ramWarnPercent', 'Memory warning at', 1, 100, 1, ''],
       ['ramCritPercent', 'Memory critical at', 1, 100, 1, ''],
     ] },
+    { title: 'Power estimate', fields: [
+      ['idleWatts', 'Idle power (W)', 1, 2000, 1, 'What the server draws doing nothing. A plug-in power meter gives the most accurate number.'],
+      ['maxWatts', 'Full-load power (W)', 1, 5000, 1, 'What it draws at 100% CPU. Must be above idle.'],
+      ['centsPerKwh', 'Electricity price (cents per kWh)', 1, 500, 1, 'From your power bill. The US average is about 16.'],
+    ] },
     { title: 'Display', fields: [
       ['dashboardProcessRows', 'Dashboard process rows', 3, 20, 1, ''],
       ['processPageRows', 'Processes page max rows', 10, 500, 10, ''],

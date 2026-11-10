@@ -16,10 +16,18 @@ public class TelemetryController {
 
     private final TelemetrySampler sampler;
     private final TelemetryHistory history;
+    private final SettingsService settings;
 
-    public TelemetryController(TelemetrySampler sampler, TelemetryHistory history) {
+    public TelemetryController(TelemetrySampler sampler, TelemetryHistory history, SettingsService settings) {
         this.sampler = sampler;
         this.history = history;
+        this.settings = settings;
+    }
+
+    /** Estimated power draw and monthly electricity cost, from the last hour of CPU load. */
+    @GetMapping("/power")
+    public PowerEstimator.Estimate getPower() {
+        return PowerEstimator.estimate(history.recent(60), sampler.latest().cpuPercent(), settings.get());
     }
 
     @GetMapping

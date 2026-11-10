@@ -30,8 +30,9 @@ The distributed attack (section 5) takes about a minute, so it is opt-in:
 | Scaling users (real HTTP server, under attack) | `ServerStressProofTest` | 1 |
 | Startup smoke test | `SpiralosTelemetryApplicationTests` | 1 |
 | Trend history + anomaly alerts (Week 10) | `AnomalyDetectionTests` | 14 |
-| Trend history + alert endpoints (Week 10) | `TrendAlertApiTests` | 3 |
-| **Total in every build** | | **68 passing** |
+| Trend history, alert, power and disk endpoints | `TrendAlertApiTests` | 5 |
+| Home-lab features: alert culprits, power estimate, disk forecast | `HomelabFeatureTests` | 12 |
+| **Total in every build** | | **82 passing** |
 | Distributed attack, 256 MB heap (`-Pattack`) | `DistributedAttackTest` | 1 |
 
 ---

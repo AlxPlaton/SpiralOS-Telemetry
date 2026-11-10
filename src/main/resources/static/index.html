@@ -35,6 +35,12 @@
         <svg class="sparkline" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"><polyline id="net-spark-line" points="" /></svg>
         <div class="metric-sub"><span id="net-up">▲ --</span><span id="net-down">▼ --</span></div>
       </article>
+      <article class="metric-card" id="card-power">
+        <div class="metric-head"><span class="metric-label">Power draw</span><span class="metric-flag" id="power-flag">estimate</span></div>
+        <div class="metric-value" id="power-value">--</div>
+        <svg class="sparkline" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"><polyline id="power-spark-line" points="" /></svg>
+        <div class="metric-sub"><span id="power-avg">--</span><span id="power-cost">--</span></div>
+      </article>
     </section>
 
     <section class="table-section">
@@ -60,6 +66,11 @@
     <section class="table-section">
       <div class="table-head"><h2>Alerts</h2><span class="table-sub">threshold + spike detection</span></div>
       <ul class="alert-list" id="alert-list"></ul>
+    </section>
+
+    <section class="table-section">
+      <div class="table-head"><h2>Storage</h2><span class="table-sub">local drives · forecast from the last 12 hours</span></div>
+      <ul class="disk-list" id="disk-list"></ul>
     </section>
 
     <section class="table-section">
